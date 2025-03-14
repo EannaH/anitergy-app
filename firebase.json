@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "source": "functions"
+  },
+  "hosting": {
+    "site": "energy-tracker-app",
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "nextjsApp"
+      }
+    ]
+  }
+}
