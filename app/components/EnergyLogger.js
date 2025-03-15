@@ -144,14 +144,11 @@ const emotionCategories = {
  // ✅ Runs when user logs in, fetches logs
   // --- Step 2: Update useEffect to Include fetchLogs in Dependency Array ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        fetchLogs(currentUser.uid);
-      }
-    });
-    return () => unsubscribe();
-  }, [fetchLogs]);  // Include fetchLogs here
+    // ✅ Temporarily disable login requirement
+    setUser({ uid: "test-user" }); // Fake user ID for testing
+    fetchLogs("test-user"); // Fetch logs without authentication
+  }, [fetchLogs]); 
+  
 
   // ✅ Simulate and load HRV data when the component first mounts
   useEffect(() => {
