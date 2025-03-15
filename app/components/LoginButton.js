@@ -3,16 +3,15 @@
 import { useState, useEffect } from "react";
 import { auth } from "../lib/firebase"; 
 import { 
-  signOut, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  onAuthStateChanged 
+  onAuthStateChanged, 
+  signOut 
 } from "firebase/auth";
 
 export default function LoginButton() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState(null);
 
@@ -23,14 +22,17 @@ export default function LoginButton() {
     return () => unsubscribe();
   }, []);
 
-  // Email/Password Sign-In or Register
+  // Fixed password for dev phase
+  const DEFAULT_PASSWORD = "Anitergy123!";
+
+  // Auto-register user with default password
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     try {
       if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email, DEFAULT_PASSWORD);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email, DEFAULT_PASSWORD);
       }
     } catch (error) {
       setError(error.message);
@@ -52,24 +54,23 @@ export default function LoginButton() {
         <>
           <h2>{isRegistering ? "Register" : "Sign In"}</h2>
 
-          {/* Email/Password Form */}
+          {/* Email Input */}
           <form onSubmit={handleEmailAuth} style={{ marginBottom: '15px' }}>
             <input
               type="email"
-              placeholder="Email"
+              placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               style={{ display: 'block', width: '100%', padding: '10px', marginBottom: '10px', border: '1px solid #ccc', borderRadius: '5px' }}
             />
+
+            {/* Hidden Password Field (Auto-filled in the background) */}
             <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{ display: 'block', width: '100%', padding: '10px', marginBottom: '10px', border: '1px solid #ccc', borderRadius: '5px' }}
+              type="hidden"
+              value={DEFAULT_PASSWORD} 
             />
+
             <button
               type="submit"
               style={{
@@ -99,7 +100,7 @@ export default function LoginButton() {
         </>
       ) : (
         <div>
-          <p style={{ color: '#444', marginBottom: '8px' }}>Hello, {user.displayName || user.email}!</p>
+          <p style={{ color: '#444', marginBottom: '8px' }}>Hello, {user.email}!</p>
           <button
             onClick={handleLogout}
             style={{
