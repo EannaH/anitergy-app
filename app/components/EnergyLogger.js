@@ -8,6 +8,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContai
 import { BarChart, Bar } from "recharts";
 import Link from "next/link";
 import { PieChart, Pie } from "recharts";
+import simulateHRV from '../lib/simulateOuraHRV';
 
 
 export default function EnergyLogger() {
@@ -28,15 +29,27 @@ export default function EnergyLogger() {
   const [deficit, setDeficit] = useState(0); // Track energy deficit
   const [currentEnergy, setCurrentEnergy] = useState(8); // Default to 8 (full rest)
   const [fatigueLoad, setFatigueLoad] = useState(0); // Stores fatigue load
+  const [HRVData, setHRVData] = useState([]);
+  const [emotionHRVCorrelation, setEmotionHRVCorrelation] = useState([]);
+  const [insights, setInsights] = useState([]);  // ✅ clearly newly added state
+  
 
 
   const fetchLogs = useCallback(async (userId) => {
     try {
+      // ✅ Ensure HRV Data is loaded before executing correlation logic
+      if (HRVData.length === 0) {
+        console.log("⏳ Waiting for HRV data before fetching logs...");
+        return; // Prevents execution until HRV data is loaded
+      }
+  
+      console.log("✅ HRV Data Loaded, Fetching Logs...");
+  
       // Fetch energy logs
       const logsRef = collection(db, "users", userId, "energy_logs");
       const q = query(logsRef, orderBy("timestamp", "asc"));
       const querySnapshot = await getDocs(q);
-      
+  
       const logsArray = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -44,91 +57,89 @@ export default function EnergyLogger() {
           ? new Date(doc.data().timestamp.seconds * 1000)
           : new Date(),
       }));
-      
+  
       setLogs(logsArray);
   
-      // Fetch today's sleep data
-      const today = new Date().toISOString().split("T")[0];
-      const sleepRef = doc(db, "users", userId, "daily_energy", today);
-      const sleepSnapshot = await getDoc(sleepRef);
+      // ✅ Define emotion categories explicitly to avoid misclassification
+const emotionCategories = {
+  positive: ["Joy", "Gratitude", "Love", "Pride", "Excitement", "Relief", "Contentment", "Hope", "Amusement", "Confidence"],
+  negative: ["Anger", "Frustration", "Fear", "Sadness", "Guilt", "Shame", "Loneliness", "Disgust", "Jealousy", "Regret", "Anxious"]
+};
 
-      if (sleepSnapshot.exists()) {
-        const sleepData = sleepSnapshot.data();
-        setSleepHours(sleepData.sleep_hours || 8);
-        setDeficit(sleepData.deficit || 0);
-        setFatigueLoad(sleepData.fatigueLoad || 0);
-        console.log("✅ Sleep Data Retrieved:", sleepData);
-    
-        // Call energy decay function with sleep data
-        calculateEnergyDecay(sleepData.start_energy || 8, sleepData.deficit || 0, sleepData.fatigueLoad || 0);
-      } else {
-        console.log("❌ No sleep data found for today.");
-        setSleepHours(8);
-        setDeficit(0);
-    
-        // Default decay calculation (assumes 8 energy)
-        calculateEnergyDecay(8, 0, 0);
-      }
-    
-      // Calculate Daily Energy Averages
-      const dailyEnergy = {};
-      const dayPatterns = {};  
-    
+      // ✅ Emotion-HRV correlation logic (Ensures HRV Data is available)
+      const emotionHRVScores = {};
+  
       logsArray.forEach((log) => {
-        const date = log.timestamp.toISOString().split("T")[0]; 
-        const day = log.timestamp.toLocaleDateString("en-US", { weekday: "long" });
-    
-        if (!dailyEnergy[date]) {
-          dailyEnergy[date] = { total: 0, count: 0 };
-        }
-        dailyEnergy[date].total += log.energy;
-        dailyEnergy[date].count += 1;
-    
-        if (!dayPatterns[day]) {
-          dayPatterns[day] = { total: 0, count: 0 };
-        }
-        dayPatterns[day].total += log.energy;
-        dayPatterns[day].count += 1;
-      });
-    
-      const averageData = Object.keys(dailyEnergy).map((date) => ({
-        date,
-        avgEnergy: dailyEnergy[date].total / dailyEnergy[date].count,
-      }));
-    
-      setEnergyAverages(averageData);
-    
-      const dayAverages = Object.keys(dayPatterns).map((day) => ({
-        day,
-        avgEnergy: dayPatterns[day].total / dayPatterns[day].count,
-      }));
-    
-      setDayInsights(dayAverages);
-    
-      // Count Emotion Frequency for Pie Chart
-      const emotionCounts = {};
-      logsArray.forEach((log) => {
-        if (log.emotions && Array.isArray(log.emotions)) {
+        const logDate = log.timestamp.toISOString().split('T')[0]; 
+        const HRVentry = HRVData.find(entry => entry.date === logDate);
+        const HRVvalue = HRVentry ? HRVentry.HRV : null;
+  
+        if (HRVvalue && log.emotions && Array.isArray(log.emotions)) {
           log.emotions.forEach((emotion) => {
-            if (!emotionCounts[emotion]) {
-              emotionCounts[emotion] = 0;
+            if (!emotionHRVScores[emotion]) {
+              emotionHRVScores[emotion] = { totalHRV: 0, count: 0 };
             }
-            emotionCounts[emotion] += 1;
+            emotionHRVScores[emotion].totalHRV += HRVvalue;
+            emotionHRVScores[emotion].count += 1;
           });
         }
       });
-    
-      const emotionData = Object.keys(emotionCounts).map((emotion) => ({
-        name: emotion,
-        value: emotionCounts[emotion],
+  
+      // ✅ Compute average HRV per emotion
+      const emotionHRVCorrelationData = Object.keys(emotionHRVScores).map((emotion) => ({
+        emotion,
+        averageHRV: parseFloat(
+          (emotionHRVScores[emotion].totalHRV / emotionHRVScores[emotion].count).toFixed(1)
+        ),
       }));
-    
-      setEmotionFrequency(emotionData);
-    
+  
+      setEmotionHRVCorrelation(emotionHRVCorrelationData);
+      
+      // ✅ Generate Smart Insights
+      const positiveThreshold = 70; 
+      const negativeThreshold = 55; 
+      
+      // ✅ Corrected categorization of emotions based on HRV
+      const positiveEmotions = [];
+      const negativeEmotions = [];
+      
+      emotionHRVCorrelationData.forEach(entry => {
+        if (entry.averageHRV >= positiveThreshold && emotionCategories.positive.includes(entry.emotion)) {
+          positiveEmotions.push(entry.emotion);
+        } else if (entry.averageHRV <= negativeThreshold && emotionCategories.negative.includes(entry.emotion)) {
+          negativeEmotions.push(entry.emotion);
+        }
+      });
+      
+      
+      // ✅ Ensures that emotions in the neutral range (between thresholds) are completely excluded
+      
+      
+  
+      const insightsList = [];
+
+      if (positiveEmotions.length > 0) {
+        insightsList.push(`✅ Positive Emotions (${positiveEmotions.join(", ")}) correlate with significantly higher HRV.`);
+      }
+      
+      if (negativeEmotions.length > 0) {
+        insightsList.push(`⚠️ Negative Emotions (${negativeEmotions.join(", ")}) consistently lower your HRV.`);
+      }
+      
+      // ✅ Ensure insights exclude neutral emotions and only display results when valid
+      if (positiveEmotions.length === 0 && negativeEmotions.length === 0) {
+        insightsList.push("ℹ️ No strong correlation detected. Keep tracking for better insights.");
+      }
+      
+      setInsights(insightsList);
+      
+        
+      
     } catch (error) {
       console.error("❌ Error fetching logs:", error);
     }
-  }, []);  // Empty dependency array; add dependencies if needed
+  }, [HRVData]);  // ✅ Added HRVData as a dependency
+   // Empty dependency array; add dependencies if needed
 
  // ✅ Runs when user logs in, fetches logs
   // --- Step 2: Update useEffect to Include fetchLogs in Dependency Array ---
@@ -142,6 +153,21 @@ export default function EnergyLogger() {
     return () => unsubscribe();
   }, [fetchLogs]);  // Include fetchLogs here
 
+  // ✅ Simulate and load HRV data when the component first mounts
+  useEffect(() => {
+    const data = simulateHRV({
+      days: 30,            
+      baseHRV: 65,         
+      variability: 10,      
+      trend: 'declining',  // ✅ changed clearly to declining
+    });
+  
+    setHRVData(data);
+    console.log("✅ Simulated HRV Data (Declining) Loaded:", data);
+  }, []);
+  
+
+
 // ✅ Logs currentEnergy updates to console
 useEffect(() => {
   console.log("⚡ Current Energy:", currentEnergy);
@@ -149,17 +175,48 @@ useEffect(() => {
 
 
   // ✅ Add this function BEFORE fetchLogs
-  const calculateEnergyDecay = (startEnergy, sleepDebt, fatigueLoad) => {
+  const calculateEnergyDecay = (startEnergy, sleepDebt, fatigueLoad, todaysHRV = 65) => {
     const now = new Date();
     const wakeUpTime = new Date();
     wakeUpTime.setHours(7, 0, 0, 0);
     const hoursAwake = Math.max(0, (now - wakeUpTime) / (1000 * 60 * 60));
+  
     let decayRate = 0.5;
-    decayRate += (sleepDebt / 2) * 0.1;
-    let adjustedEnergy = startEnergy - (fatigueLoad * 0.2);
+    
+    // ✅ Sleep Debt: Higher impact on decay
+    decayRate += (sleepDebt / 2) * 0.15; // Increased effect
+    
+    // ✅ HRV Influence: Better regulation of fatigue
+    if (todaysHRV >= 75) {
+      decayRate *= 0.7; // Higher HRV improves energy retention
+    } else if (todaysHRV < 50) {
+      decayRate *= 1.3; // Lower HRV accelerates fatigue decay
+    }
+  
+    // ✅ Fatigue Modifier: Increasing fatigue causes greater exhaustion
+    if (fatigueLoad > 10) {
+      decayRate *= 1.2; // Severe fatigue increases decay significantly
+    } else if (fatigueLoad > 5) {
+      decayRate *= 1.1; // Mild fatigue slightly increases decay
+    }
+  
+    // ✅ Adjusted Energy: Non-linear reduction
+    let adjustedEnergy = startEnergy - (fatigueLoad * 0.15); // Reduced fatigue penalty
     const decayedEnergy = Math.max(0, adjustedEnergy - (hoursAwake * decayRate));
+  
+    console.log("✅ Energy decay adjusted with fatigue modeling:", {
+      startEnergy,
+      sleepDebt,
+      fatigueLoad,
+      todaysHRV,
+      decayRate,
+      decayedEnergy,
+    });
+  
     setCurrentEnergy(decayedEnergy);
   };
+  
+  
   
 
  
@@ -240,7 +297,7 @@ useEffect(() => {
       const today = new Date().toISOString().split("T")[0];
       const sleepRef = doc(db, "users", userId, "daily_energy", today);
       const sleepSnapshot = await getDoc(sleepRef);
-      
+  
       let previousDeficit = 0;
       let previousFatigue = 0;
   
@@ -249,14 +306,27 @@ useEffect(() => {
         previousFatigue = sleepSnapshot.data().fatigueLoad || 0;
       }
   
-      // ✅ Calculate new sleep debt
-      let newDeficit = sleepHours < 8 ? previousDeficit + (8 - sleepHours) : Math.max(0, previousDeficit - (sleepHours - 8));
+      // ✅ Sleep Debt Calculation: Sleep surplus helps recovery
+      let newDeficit = sleepHours < 8 ? previousDeficit + (8 - sleepHours) : Math.max(0, previousDeficit - (sleepHours - 8) * 0.8);
   
-      // ✅ Long-Term Fatigue Load Increases When Debt Persists
-      let newFatigueLoad = previousFatigue + (newDeficit > 10 ? 0.2 * newDeficit : 0); // If debt >10 hrs, increase fatigue
+      // ✅ Adjusted Fatigue Load Calculation
+      let fatigueIncreaseFactor = newDeficit > 10 ? 0.25 : 0.1; // Severe debt increases fatigue faster
+      let fatigueRecoveryFactor = sleepHours > 8 ? 0.4 : 0.2; // Extra sleep speeds up recovery
   
-      // ✅ Set starting energy with fatigue effects
-      let startEnergy = Math.max(3, 8 - newFatigueLoad); // Fatigue lowers starting energy
+      // ✅ If sleep debt is growing, fatigue load should increase
+      let newFatigueLoad;
+      if (newDeficit > previousDeficit) {
+        newFatigueLoad = previousFatigue + (newDeficit * fatigueIncreaseFactor);
+      } else {
+        // ✅ If sleep hours are sufficient, allow gradual fatigue recovery
+        newFatigueLoad = Math.max(0, previousFatigue - (sleepHours * fatigueRecoveryFactor));
+      }
+  
+      // ✅ Cap Fatigue Load so it doesn't exceed extreme exhaustion
+      newFatigueLoad = Math.min(20, newFatigueLoad);
+  
+      // ✅ Set starting energy based on fatigue effects
+      let startEnergy = Math.max(3, 8 - (newFatigueLoad * 0.8)); // Fatigue lowers starting energy
   
       await setDoc(sleepRef, {
         sleep_hours: sleepHours,
@@ -265,14 +335,16 @@ useEffect(() => {
         fatigueLoad: newFatigueLoad,
       });
   
-      console.log("✅ Sleep Data Saved:", { sleepHours, startEnergy, newDeficit, newFatigueLoad });
+      console.log("✅ Optimized Sleep Data Saved:", { sleepHours, startEnergy, newDeficit, newFatigueLoad });
   
       setDeficit(newDeficit);
+      setFatigueLoad(newFatigueLoad);
     } catch (error) {
       console.error("❌ Error saving sleep data:", error);
     }
   };
   
+
 
   return (
     <div className="max-w-lg mx-auto p-4 bg-white shadow-lg rounded-lg">
@@ -518,6 +590,24 @@ useEffect(() => {
   <p className="text-gray-500 mt-2">No monthly trend data available.</p>
 )}
 
+{/* ✅ Simulated HRV Trends */}
+<h2 className="text-xl font-bold mt-6">Simulated Oura HRV Trends (Last 30 days)</h2>
+
+{HRVData.length > 0 ? (
+  <ResponsiveContainer width="100%" height={250} className="mt-4">
+    <LineChart data={HRVData}>
+      <CartesianGrid strokeDasharray="3 3" />
+      <XAxis dataKey="date" />
+      <YAxis domain={[20, 120]} />
+      <Tooltip />
+      <Line type="monotone" dataKey="HRV" stroke="#007aff" strokeWidth={2} />
+    </LineChart>
+  </ResponsiveContainer>
+) : (
+  <p className="text-gray-500 mt-2">No HRV data available.</p>
+)}
+
+
 {/* ✅ Smart Insights Based on Day Patterns */}
 <h2 className="text-xl font-bold mt-6">Smart Insights</h2>
 
@@ -557,6 +647,21 @@ useEffect(() => {
   </ResponsiveContainer>
 ) : (
   <p className="text-gray-500 mt-2">No emotion data available.</p>
+)}
+
+{/* ✅ Smart Insights Based on Emotion-HRV Correlation */}
+<h2 className="text-xl font-bold mt-6">Emotion-HRV Smart Insights</h2>
+
+{insights.length > 0 ? (
+  <ul className="mt-4 p-4 bg-blue-50 rounded-md shadow-md">
+    {insights.map((insight, index) => (
+      <li key={index} className="mb-2 text-gray-700">
+        {insight}
+      </li>
+    ))}
+  </ul>
+) : (
+  <p className="text-gray-500 mt-2">No insights available yet.</p>
 )}
 
 
