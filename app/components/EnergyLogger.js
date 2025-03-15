@@ -145,18 +145,15 @@ const emotionCategories = {
   // --- Step 2: Update useEffect to Include fetchLogs in Dependency Array ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
       if (currentUser) {
-        setUser(currentUser);
         fetchLogs(currentUser.uid);
-      } else {
-        // ✅ Allow app access without login but still support Google Sign-In
-        setUser({ uid: "test-user" }); // Fake user ID, but don't block login
-        fetchLogs("test-user");
       }
     });
   
     return () => unsubscribe();
-  }, [fetchLogs]); 
+  }, [fetchLogs]);
+   
   
   
 

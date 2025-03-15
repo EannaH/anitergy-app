@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { auth, provider } from "../lib/firebase"; 
+import { auth } from "../lib/firebase"; 
 import { 
-  signInWithPopup, 
   signOut, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -23,15 +22,6 @@ export default function LoginButton() {
     });
     return () => unsubscribe();
   }, []);
-
-  // Google Sign-In
-  const handleGoogleSignIn = async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      setError(error.message);
-    }
-  };
 
   // Email/Password Sign-In or Register
   const handleEmailAuth = async (e) => {
@@ -95,22 +85,6 @@ export default function LoginButton() {
               {isRegistering ? "Register" : "Sign In"}
             </button>
           </form>
-
-          {/* Google Sign-In Button */}
-          <button
-            onClick={handleGoogleSignIn}
-            style={{
-              width: '100%',
-              padding: '10px',
-              backgroundColor: '#4285F4',
-              color: 'white',
-              borderRadius: '5px',
-              border: 'none',
-              marginBottom: '10px',
-            }}
-          >
-            Sign in with Google
-          </button>
 
           {/* Toggle Between Login/Register */}
           <p 
