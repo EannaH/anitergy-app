@@ -484,9 +484,26 @@ useEffect(() => {
 
 {/* Navigation Link to Logs Page */}
 <div className="mt-6 text-center">
-<Link href="/logs" className="bg-blue-500 text-white px-4 py-2 rounded">
-  View All Logged Entries
-</Link>
+<Link
+    href="/logs"
+    style={{
+      display: "block",
+      width: "100%",
+      padding: "10px",
+      backgroundColor: "#4CAF50",
+      color: "white",
+      border: "none",
+      borderRadius: "5px",
+      cursor: "pointer",
+      fontSize: "16px",
+      fontWeight: "bold",
+      textAlign: "center",
+      marginTop: "10px",
+      textDecoration: "none",
+    }}
+  >
+    View All Logged Entries
+  </Link>
 
 </div>
 
