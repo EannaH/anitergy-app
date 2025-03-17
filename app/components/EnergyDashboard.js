@@ -1,11 +1,8 @@
-// app/components/EnergyDashboard.js (example path)
-// or ./EnergyDashboard.js depending on your structure
-
-"use client"; // if you're on Next.js (app router) and need client-side code
-
-import React from "react";
+import EnergyBar from "./EnergyBar"; // Import the EnergyBar component
 
 export default function EnergyDashboard() {
+  const testEnergyLevel = 65; // Temporary value, we'll hook real data later
+
   return (
     <div style={{
       display: "flex",
@@ -32,23 +29,11 @@ export default function EnergyDashboard() {
         </p>
       </div>
 
-      {/* Placeholder for Horizontal Bar */}
-      <div style={{
-        width: "80%",
-        height: "20px",
-        backgroundColor: "#eee",
-        borderRadius: "10px",
-        position: "relative"
-      }}>
-        <p style={{
-          position: "absolute",
-          top: "-25px",
-          color: "#666",
-          fontSize: "14px"
-        }}>
-          Horizontal LED Bar (Placeholder)
-        </p>
-      </div>
+      {/* Energy Bar Component */}
+      <p style={{ color: "#666", fontSize: "14px", marginBottom: "8px" }}>
+        Energy Level: {testEnergyLevel}%
+      </p>
+      <EnergyBar energyLevel={testEnergyLevel} />
     </div>
   );
 }
