@@ -54,17 +54,76 @@ export default function EnergyLogger() {
       console.log("✅ HRV Data Loaded, Fetching Logs...");
   
       // Fetch energy logs
-      const logsRef = collection(db, "users", userId, "energy_logs");
+      console.log("🔍 Fetching Firestore logs for user:", userId);
+
+      console.log(`🛠️ Checking Firestore Path: users/${userId}/energy_logs`);
+
+      console.log(`🛠️ Checking Firestore Path: users/${userId}/energy_logs`);
+
+      const today = new Date().toISOString().split("T")[0]; // Format as YYYY-MM-DD
+      const logsRef = collection(db, "users", userId, "daily_energy", today, "logs");
+      
+      
+      
+      console.log("🧐 Fetching logs without orderBy for debugging...");
+      let testSnapshot;
+      try {
+          testSnapshot = await getDocs(logsRef);
+      } catch (error) {
+          console.error("❌ Firestore test query failed (without orderBy):", error);
+          testSnapshot = null;
+      }
+      
+      // 🔍 Check if Firestore returned data
+      if (testSnapshot && !testSnapshot.empty) {
+          console.log("✅ Firestore logs exist! Raw data (without orderBy):");
+          testSnapshot.forEach(doc => console.log("📌 Doc ID:", doc.id, "Data:", doc.data()));
+      } else {
+          console.warn("⚠️ No logs found even without orderBy. Something is wrong.");
+      }
+      
+      
+      if (!testSnapshot || testSnapshot.empty) {
+          console.warn("⚠️ No logs found even without orderBy. Something is wrong.");
+      } else {
+          console.log("✅ Logs exist without orderBy:");
+          testSnapshot.forEach(doc => console.log(doc.id, doc.data()));
+      }
+      
+      // Now attempt ordered query
       const q = query(logsRef, orderBy("timestamp", "asc"));
-      const querySnapshot = await getDocs(q);
-  
-      const logsArray = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.seconds
-          ? new Date(doc.data().timestamp.seconds * 1000)
-          : new Date(),
-      }));
+      let querySnapshot;
+      
+      try {
+          querySnapshot = await getDocs(q);
+      } catch (error) {
+          console.error("❌ Firestore query failed:", error);
+          querySnapshot = null;
+      }
+      
+      
+      
+      if (!querySnapshot || querySnapshot.empty) {
+          console.warn("⚠️ No logs found in Firestore.");
+          setLogs([]); // Ensure state is set even if no logs are found
+          return;
+      }
+      
+      console.log("🔥 Firestore Data Before Processing:", querySnapshot.docs.map((doc) => doc.data()));
+      
+
+      const logsArray = querySnapshot.docs.map((doc) => {
+        const rawData = doc.data();
+        console.log(`📌 Checking Firestore Entry:`, rawData);
+        return {
+          id: doc.id,
+          ...rawData,
+          timestamp: rawData.timestamp?.seconds
+            ? new Date(rawData.timestamp.seconds * 1000)
+            : new Date(),
+        };
+      });
+      
   
       console.log("🔥 Full Energy Logs from Firestore:", logsArray);
       setLogs(logsArray);
@@ -367,17 +426,6 @@ useEffect(() => {
 
     
 
-  const handleDelete = async (logId) => {
-    if (!user) return;
-
-    try {
-      await deleteDoc(doc(db, "users", user.uid, "energy_logs", logId));
-      fetchLogs(user.uid);
-    } catch (error) {
-      console.error("Error deleting log:", error);
-    }
-  };
-
   const handleEdit = (log) => {
     setEnergy(log.energy);
     setSituation(log.situation);
@@ -440,7 +488,29 @@ useEffect(() => {
     }
   };
   
-
+  const handleSubmit = async (formData) => {
+    if (!user) {
+      console.error("❌ No authenticated user. Cannot log energy.");
+      return;
+    }
+  
+    setLoading(true);
+    try {
+      const logRef = collection(db, "users", user.uid, "energy_logs");
+      await addDoc(logRef, {
+        ...formData,
+        timestamp: serverTimestamp(),
+      });
+  
+      console.log("✅ Energy log successfully added:", formData);
+      fetchLogs(user.uid);  // Refresh logs after submission
+    } catch (error) {
+      console.error("❌ Error saving log:", error);
+    }
+  
+    setLoading(false);
+  };
+  
 
   return (
     <div className="max-w-lg mx-auto p-4 bg-white shadow-lg rounded-lg">
@@ -449,7 +519,6 @@ useEffect(() => {
       </h2>
 
       {/* ✅ Input Form */}
-      {/* Replaced the old form with <EnergyForm /> */}
       <EnergyForm
   initialEnergy={energy}
   initialSituation={situation}
@@ -457,13 +526,64 @@ useEffect(() => {
   initialEmotions={emotions}
   initialSleepHours={sleepHours}
   loading={loading}
-  onSubmit={(formData) => {
-    // This is where we handle the old 'handleSubmit' logic
-    // e.g., call a function to save logs, reset fields, etc.
-    // We'll put that code here in Step 4.
-    console.log("EnergyForm submission:", formData);
+  onSubmit={async (formData) => {
+    if (!user) return console.error("❌ User not authenticated");
+  
+    if (loading) {
+      console.warn("⚠️ Submission blocked: Already processing.");
+      return;
+    }
+  
+    setLoading(true);
+  
+    try {
+      console.log("🚀 Checking for existing logs before writing...");
+  
+      const userId = user.uid;
+      const today = new Date().toISOString().split("T")[0];
+      const logsRef = collection(db, "users", userId, "daily_energy", today, "logs");
+  
+      // ✅ Stronger Duplicate Prevention (Check last 10 seconds)
+      const existingLogs = await getDocs(logsRef);
+      const duplicateExists = existingLogs.docs.some((doc) => {
+        const data = doc.data();
+        return (
+          data.energy === formData.energy &&
+          data.primary_emotion === formData.primary_emotion &&
+          data.secondary_emotion === formData.secondary_emotion &&
+          data.situation === formData.situation &&
+          data.trigger === formData.trigger &&
+          data.sleepHours === formData.sleepHours &&
+          Math.abs(new Date(data.timestamp?.seconds * 1000) - new Date()) < 10000
+        );
+      });
+  
+      if (duplicateExists) {
+        console.warn("⚠️ Duplicate log detected. Skipping submission.");
+        return;
+      }
+  
+      console.log("✍ Writing new log to Firebase...");
+      await addDoc(logsRef, {
+        ...formData,
+        timestamp: serverTimestamp(),
+      });
+  
+      console.log("✅ Energy Log Successfully Saved:", formData);
+      fetchLogs(userId);
+    } catch (error) {
+      console.error("❌ Error saving energy log:", error);
+    } finally {
+      setLoading(false);
+    }
   }}
+  
+  
+  
+  
 />
+
+
 {/* ✅ This is where the old Sleeptracking block was before SleepTracking.js */}
 <SleepTracking deficit={deficit} fatigueLoad={fatigueLoad} />
 
