@@ -92,12 +92,20 @@ const handleFormSubmit = async (e) => {
     setTimeout(() => {
       console.log("🔓 Submission lock reset.");
       setIsSubmitting(false);
+    
+      // ✅ Reset all fields after submission
+      setEnergy(0);
+      setSituation("");
+      setTrigger("");
       setSelectedEmotions((prev) => {
         console.log("🧹 Clearing selected emotions after submission:", prev);
         return [];
       });
-      
-    }, 5000);
+      setSleepHours(8); // Reset sleep hours to default
+    
+      console.log("🧹 Form fields reset after submission.");
+    }, 500);
+    
     
   }
 };
@@ -109,17 +117,21 @@ const handleFormSubmit = async (e) => {
       onSubmit={handleFormSubmit}
       className="space-y-4 bg-gray-100 p-4 rounded-md shadow-md"
     >
-      <label className="block">
-        <span className="text-gray-700">Energy Level (-10 to +10):</span>
-        <input
-          type="number"
-          min="-10"
-          max="10"
-          value={energy}
-          onChange={(e) => setEnergy(parseInt(e.target.value))}
-          className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-        />
-      </label>
+<label className="block">
+  <span className="text-gray-700">How Do You Feel? (-10 to +10):</span>
+  <input
+    type="range"
+    min="-10"
+    max="10"
+    step="1"
+    value={energy}
+    onChange={(e) => setEnergy(parseInt(e.target.value))}
+    className="mt-1 block w-full"
+    style={{ width: "100%" }} // Ensures full width for usability
+  />
+  <div className="text-center mt-2 text-gray-700">Selected Energy: {energy}</div>
+</label>
+
 
 {/* Situation Picker Button */}
 <button
@@ -149,9 +161,11 @@ const handleFormSubmit = async (e) => {
 <button
   type="button"
   onClick={() => setShowEmotionModal(true)}
-  className="w-full bg-gray-200 p-3 rounded-md mt-2 text-left"
+  className={`w-full p-3 rounded-md mt-2 text-left transition-colors 
+    ${selectedEmotions.length > 0 ? "bg-blue-500 text-white" : "bg-gray-200 text-black"}`}
+  
 >
-  {selectedEmotions.length > 0 ? `😃 ${selectedEmotions.join(", ")}` : "How Did You Feel?"}
+  {selectedEmotions.length > 0 ? `😃 ${selectedEmotions.join(", ")}` : "What Did You Feel?"}
 </button>
 
 
@@ -162,7 +176,7 @@ const handleFormSubmit = async (e) => {
   className={`w-full p-3 rounded-md text-white ${
     !isFormComplete
       ? "bg-gray-400 cursor-not-allowed"
-      : "bg-blue-500 hover:bg-blue-600"
+      : "bg-red-500 hover:bg-green-600"
   }`}
 >
   {loading ? "Saving..." : "Log Energy"}

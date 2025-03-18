@@ -2,7 +2,7 @@
 
 import LoginButton from "../components/LoginButton";
 import EnergyLogger from "../components/EnergyLogger";
-import EnergyDashboard from "../components/EnergyDashboard";
+// import EnergyDashboard from "../components/EnergyDashboard";
 
 export default function Home() {
   return (
@@ -13,7 +13,7 @@ export default function Home() {
       <LoginButton />
 
       {/* Optional: Insert the new EnergyDashboard here */}
-      <EnergyDashboard />
+{/* <EnergyDashboard /> */}
 
       {/* Energy Logging Form */}
       <EnergyLogger />
